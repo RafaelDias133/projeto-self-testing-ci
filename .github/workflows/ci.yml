@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop, 'feature/**', 'release/**', 'hotfix/**']
+  pull_request:
+    branches: [main, develop]
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: mkdir -p logs
+      - name: Testes unitarios
+        run: npm run test:unit 2>&1 | tee logs/unit.log
+      - name: Testes de integracao
+        run: npm run test:integration 2>&1 | tee logs/integration.log
+      - name: Testes E2E
+        run: npm run test:e2e 2>&1 | tee logs/e2e.log
+      - name: Cobertura com gate (branches 80%, linhas 85%)
+        run: npm run test:coverage 2>&1 | tee logs/coverage.log
+      - name: Publicar relatorio de cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+      - name: Publicar logs dos testes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: logs/
+
+  load-test:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Subir API
+        run: |
+          npm start > api.log 2>&1 &
+          npx --yes wait-on http://localhost:3000/health
+      - uses: grafana/setup-k6-action@v1
+      - name: Teste de carga (50 VUs)
+        run: k6 run --summary-export=k6-summary.json load/transfer-load.js 2>&1 | tee k6.log
+      - name: Publicar resultado do teste de carga
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-report
+          path: |
+            k6-summary.json
+            k6.log
+            api.log
