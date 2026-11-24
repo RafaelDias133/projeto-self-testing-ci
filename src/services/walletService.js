@@ -131,6 +131,9 @@ function createWalletService({
       if (!idempotencyKey) {
         throw new ValidationError('Cabecalho Idempotency-Key e obrigatorio');
       }
+      if (fromAccountId === toAccountId) {
+        throw new ValidationError('Conta de origem e destino devem ser diferentes');
+      }
       const amountCents = toCents(amount);
       const { transfer, replayed } = executeTransfer({ fromAccountId, toAccountId, amountCents, idempotencyKey });
       const view = transferView(transfer, replayed);
