@@ -1,3 +1,9 @@
+function startOfNextDay(date) {
+  const next = new Date(`${date}T00:00:00.000Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return next.toISOString();
+}
+
 function createTransactionRepository(db) {
   const insert = db.prepare(
     `INSERT INTO transactions (id, account_id, transfer_id, type, amount_cents, balance_after_cents, description, created_at)
@@ -30,8 +36,8 @@ function createTransactionRepository(db) {
         params.from = from;
       }
       if (to) {
-        conditions.push('created_at <= @to');
-        params.to = to;
+        conditions.push('created_at < @to');
+        params.to = startOfNextDay(to);
       }
       if (type) {
         conditions.push('type = @type');
