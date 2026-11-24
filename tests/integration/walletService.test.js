@@ -146,6 +146,17 @@ describe('transfer', () => {
     await expect(service.transfer({ fromAccountId: from.id, toAccountId: to.id, amount: 0, idempotencyKey: 'c' })).rejects.toThrow(ValidationError);
   });
 
+  test('rejeita transferencia para a propria conta', async () => {
+    const { service, fraudNotifier } = build();
+    const { from } = await twoAccounts(service);
+
+    await expect(
+      service.transfer({ fromAccountId: from.id, toAccountId: from.id, amount: 10, idempotencyKey: 'k1' }),
+    ).rejects.toThrow(ValidationError);
+    expect(service.getStatement(from.id, {}).transactions).toHaveLength(1);
+    expect(fraudNotifier.notify).not.toHaveBeenCalled();
+  });
+
   test('falha no gateway anti-fraude nao desfaz a transferencia', async () => {
     const fraudNotifier = { notify: jest.fn().mockRejectedValue(new Error('gateway fora do ar')) };
     const { service, logger } = build({ fraudNotifier });
