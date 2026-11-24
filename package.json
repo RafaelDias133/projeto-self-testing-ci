@@ -1,6 +1,6 @@
 {
   "name": "projeto-self-testing-ci",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Wallet API - microsserviço financeiro com self-testing e CI",
   "main": "src/server.js",
   "private": true,
