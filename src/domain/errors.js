@@ -18,12 +18,6 @@ class NotFoundError extends DomainError {
   }
 }
 
-class ConflictError extends DomainError {
-  constructor(message) {
-    super(message, 409);
-  }
-}
-
 class InsufficientFundsError extends DomainError {
   constructor(message = 'Saldo insuficiente') {
     super(message, 422);
@@ -40,7 +34,6 @@ module.exports = {
   DomainError,
   ValidationError,
   NotFoundError,
-  ConflictError,
   InsufficientFundsError,
   InvalidDocumentError,
 };
