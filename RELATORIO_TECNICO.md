@@ -78,3 +78,85 @@ Modelo adotado: **Git Flow**.
 Convenção de commits: **Conventional Commits** (`feat`, `fix`, `test`, `refactor`, `docs`, `ci`, `chore`). Os commits do ciclo TDD são marcados com `[RED]`, `[GREEN]` e `[REFACTOR]`.
 
 Proteção de branches no GitHub (Settings → Branches) para `main` e `develop`: exigir pull request, exigir o status check `CI / test` aprovado e bloquear push direto.
+
+## 5. Estratégia de Testes (Pirâmide)
+
+| Camada | Pasta | Testes | O que valida |
+|--------|-------|--------|--------------|
+| Unitários | `tests/unit` | 17 | Regras puras: conversão para centavos, cálculo de transferência, saldo insuficiente, validação de CPF |
+| Integração | `tests/integration` | 25 | Serviço + repositórios em SQLite `:memory:`, idempotência, concorrência, filtros do extrato, adaptadores externos |
+| E2E | `tests/e2e` | 6 | Requisições HTTP reais (servidor em porta efêmera + Supertest): criação de contas, transferência, extrato e códigos de erro |
+
+Ferramentas: Jest (runner e cobertura via Istanbul), Supertest (HTTP), better-sqlite3 (banco em memória).
+
+### 5.1 Evidência do ciclo Red-Green-Refactor
+
+Cada funcionalidade de domínio foi desenvolvida em três commits consecutivos, visíveis com `git log --oneline --grep "\[RED\]\|\[GREEN\]\|\[REFACTOR\]"`:
+
+1. `test(...) [RED]`: testes escritos antes do código, falhando.
+2. `feat(...) [GREEN]`: implementação mínima até os testes passarem.
+3. `refactor(...) [REFACTOR]`: melhoria de estrutura sem mudar comportamento.
+
+Ciclos realizados: cálculo de valores e transferência, validação de CPF, serviço da carteira e API REST. Os dois hotfixes também começaram por um teste que reproduzia o defeito.
+
+## 6. Test Doubles
+
+| Tipo | Onde | Uso |
+|------|------|-----|
+| **Mock** | `walletService.test.js` | `fraudNotifier.notify = jest.fn()`: verifica que o gateway anti-fraude é chamado **exatamente uma vez** por transferência, com `transferId`, contas, valor e data; que **não** é chamado em replay idempotente nem em saldo insuficiente. |
+| **Mock** | `externalServices.test.js` | `fetch` mockado: verifica URL, método `POST`, cabeçalhos e corpo JSON enviados ao webhook. |
+| **Stub** | `walletService.test.js` | `documentValidatorStub(true/false)`: devolve resposta fixa da validação cadastral para controlar a entrada. |
+| **Stub** | `walletService.test.js` | `fixedClock([...])`: datas fixas para testar os filtros de extrato de forma determinística. |
+| **Stub** | `externalServices.test.js` | `fetch` com resposta fixa `{ valid: true/false }` do serviço cadastral. |
+| **Fake** | todos | SQLite em memória (`:memory:`) no lugar de um banco real. |
+
+Diferença aplicada: o mock é usado para **verificar interações de saída** (o que o sistema enviou para fora); o stub apenas **fornece dados de entrada controlados**, sem asserções sobre ele.
+
+## 7. Cobertura de Código
+
+Medida com Istanbul (`jest --coverage`). Limites configurados em `package.json` (`coverageThreshold`); o Jest encerra com erro se algum ficar abaixo.
+
+| Métrica | Mínimo exigido | Obtido |
+|---------|----------------|--------|
+| Branches | 80% | 93,47% |
+| Linhas | 85% | 100% |
+| Statements | 85% | 100% |
+| Funções | — | 100% |
+
+## 8. Pipeline de Integração Contínua
+
+Arquivo `.github/workflows/ci.yml`:
+
+- **Disparo:** `push` em `main`, `develop`, `feature/**`, `release/**`, `hotfix/**` e `pull_request` para `main` e `develop`.
+- **Job `lint`:** ESLint (análise estática).
+- **Job `test`:** testes unitários, de integração e E2E em etapas separadas, depois cobertura com gate. Os logs de cada etapa são gravados em `logs/` e publicados como artefato `test-logs`; o relatório de cobertura (HTML/lcov) é publicado como artefato `coverage-report`.
+- **Job `load-test`:** sobe a API e executa o script k6, publicando `k6-summary.json` como artefato.
+- **Bloqueio de merge:** com a proteção de branch exigindo o status check `test`, um pull request com testes quebrados ou cobertura abaixo do mínimo não pode ser mesclado.
+
+## 9. Teste de Desempenho e Carga
+
+Script: `load/transfer-load.js` (k6). Cenário: 50 usuários virtuais simultâneos (`constant-vus`) durante 30 segundos, todos chamando `POST /transfers` com chaves de idempotência únicas. Limites: taxa de erro < 1% e latência média < 200 ms. Ao final, o `teardown` confere que a soma dos saldos não mudou.
+
+Execução: `npm start` e, em outro terminal, `npm run load`.
+
+Resultado medido localmente (50 clientes concorrentes, 30 s, mesmo cenário do script):
+
+| Métrica | Valor |
+|---------|-------|
+| Requisições | 122.222 |
+| Vazão | ~4.074 req/s |
+| Taxa de erro | 0,00% |
+| Latência média | 12,27 ms |
+| Latência p95 | 23,62 ms |
+| Latência máxima | 154,16 ms |
+| Soma dos saldos antes / depois | 1.000.000,00 / 1.000.000,00 |
+
+Não houve travamento nem inconsistência de saldo sob concorrência, atendendo ao RNF02 e ao RNF07. O mesmo cenário é executado pelo k6 no job `load-test` do CI, cujo resumo fica no artefato `load-test-report`.
+
+## 10. Histórico de Versões
+
+| Versão | Tipo | Descrição |
+|--------|------|-----------|
+| v1.0.0 | release | Primeira versão com contas, transferências, extrato, anti-fraude e CI |
+| v1.0.1 | hotfix | Bloqueio de transferência para a própria conta |
+| v1.0.2 | hotfix | Filtro `to` do extrato passou a incluir o dia inteiro da data final |
