@@ -160,3 +160,4 @@ Não houve travamento nem inconsistência de saldo sob concorrência, atendendo 
 | v1.0.0 | release | Primeira versão com contas, transferências, extrato, anti-fraude e CI |
 | v1.0.1 | hotfix | Bloqueio de transferência para a própria conta |
 | v1.0.2 | hotfix | Filtro `to` do extrato passou a incluir o dia inteiro da data final |
+| v1.1.0 | release | Relatório técnico com métricas de cobertura e carga |
