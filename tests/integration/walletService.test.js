@@ -229,6 +229,14 @@ describe('getStatement', () => {
     expect(statement.transactions[0]).toMatchObject({ type: 'debit', amount: 20 });
   });
 
+  test('inclui os lancamentos feitos durante todo o dia da data final', async () => {
+    const { service, a } = await scenario();
+    const statement = service.getStatement(a.id, { from: '2026-11-20', to: '2026-11-20' });
+
+    expect(statement.transactions).toHaveLength(1);
+    expect(statement.transactions[0]).toMatchObject({ type: 'credit', amount: 5 });
+  });
+
   test('rejeita filtros invalidos e conta inexistente', async () => {
     const { service, a } = await scenario();
 
